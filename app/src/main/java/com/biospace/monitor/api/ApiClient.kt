@@ -23,7 +23,7 @@ object ApiClient {
         .create(NoaaApi::class.java)
 
     val nasa: NasaApi = Retrofit.Builder()
-        .baseUrl("https://kauai.ccmc.gsfc.nasa.gov/DONKI/")
+        .baseUrl("https://api.nasa.gov/")
         .client(httpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
