@@ -79,7 +79,6 @@ dependencies {
     implementation(libs.accompanist.systemuicontroller)
     implementation(libs.coil.compose)
     implementation(libs.play.services.location)
-
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
