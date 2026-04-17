@@ -37,6 +37,7 @@ data class HemisphericPower(
 )
 
 data class HpValues(
+    @SerializedName("north")
     val north: String? = null,
     val North: String? = null,
     val south: String? = null,
