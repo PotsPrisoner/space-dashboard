@@ -11,3 +11,5 @@ local.properties
 *.jks
 *.keystore
 app/build/
+# Firebase — never commit the real key file, use GitHub Secret instead
+app/google-services.json

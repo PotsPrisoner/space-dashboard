@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">services.swpc.noaa.gov</domain>
-        <domain includeSubdomains="true">api.open-meteo.com</domain>
-        <domain includeSubdomains="true">geocoding-api.open-meteo.com</domain>
-        <domain includeSubdomains="true">kauai.ccmc.gsfc.nasa.gov</domain>
-    </domain-config>
-</network-security-config>
