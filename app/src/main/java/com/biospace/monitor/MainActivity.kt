@@ -133,6 +133,7 @@ fun BioSpaceApp(onRequestGps: (callback: (android.location.Location) -> Unit) ->
                     NavTab.CHAT -> {}
                 }
             }
+            } // end else
         }
         if (showLocationDialog) {
             LocationSearchDialog(
