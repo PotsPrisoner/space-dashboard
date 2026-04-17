@@ -107,6 +107,9 @@ fun BioSpaceApp(onRequestGps: (callback: (android.location.Location) -> Unit) ->
         Column(modifier = Modifier.fillMaxSize()) {
             AppHeader(sw.kp, sw.lastUpdated, isRefreshing, onRefresh = { vm.refresh() })
             NavTabRow(selectedTab) { selectedTab = it }
+            if (selectedTab == NavTab.CHAT) {
+                ChatScreen(messages = chat, connected = chatConnected) { text, nick -> vm.sendChatMessage(text, nick) }
+            } else {
             val scrollState = rememberScrollState()
             Column(
                 modifier = Modifier.fillMaxSize().verticalScroll(scrollState)
@@ -127,10 +130,7 @@ fun BioSpaceApp(onRequestGps: (callback: (android.location.Location) -> Unit) ->
                     NavTab.IMAGES -> SolarImagesScreen()
                     NavTab.ASSESSMENT -> AssessmentScreen(assessment)
                     NavTab.ALERTS -> AlertsScreen(sw.alerts)
-                    NavTab.CHAT -> ChatScreen(
-                        messages = chat,
-                        connected = chatConnected
-                    ) { text, nick -> vm.sendChatMessage(text, nick) }
+                    NavTab.CHAT -> {}
                 }
             }
         }
