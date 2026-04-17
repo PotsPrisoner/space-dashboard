@@ -32,15 +32,6 @@ jobs:
       - name: Inject google-services.json
         run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
 
-      - name: Download Gradle 8.7 and regenerate wrapper
-        run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -P /tmp
-          unzip -q /tmp/gradle-8.7-bin.zip -d /tmp/gradle-install
-          /tmp/gradle-install/gradle-8.7/bin/gradle wrapper \
-            --gradle-version 8.7 \
-            --distribution-type bin \
-            --project-dir .
-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
