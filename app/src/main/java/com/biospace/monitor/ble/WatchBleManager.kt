@@ -30,6 +30,11 @@ class WatchBleManager(private val context: Context) {
 
     fun scanAndConnect() {
         if (_state.value != ConnectionState.DISCONNECTED) return
+        connect("C0:29:AB:60:4D:10")
+    }
+
+    fun scanAndConnect_disabled() {
+        if (_state.value != ConnectionState.DISCONNECTED) return
         _state.value = ConnectionState.SCANNING
         log("Scanning for BP Doctor FIT…")
 
