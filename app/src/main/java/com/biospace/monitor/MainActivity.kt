@@ -119,7 +119,7 @@ fun BioSpaceApp(onRequestGps: (callback: (android.location.Location) -> Unit) ->
             } else {
             val scrollState = rememberScrollState()
             Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(scrollState)
+                modifier = if (selectedTab == NavTab.WATCH) Modifier.fillMaxSize() else Modifier.fillMaxSize().verticalScroll(scrollState)
                     .padding(horizontal = 14.dp).padding(bottom = 24.dp)
             ) {
                 Spacer(Modifier.height(11.dp))
