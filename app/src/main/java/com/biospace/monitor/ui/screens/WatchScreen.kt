@@ -47,7 +47,7 @@ fun WatchScreen(repository: WatchRepository) {
     LaunchedEffect(Unit) {
         repository.ble.log.collect { msg ->
             logMessages.add(0, msg)
-            if (logMessages.size > 30) logMessages.removeLast()
+            if (logMessages.size > 100) logMessages.removeLast()
         }
     }
 
