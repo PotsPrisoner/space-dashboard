@@ -195,12 +195,7 @@ class WatchRepository(context: Context) {
             is WatchReading.Stress           -> live.copy(stress = reading.score)
             is WatchReading.Sleep            -> live // log but don't overwrite primary fields
             is WatchReading.HeartRate        -> live.copy(heartRate = reading.bpm)
-            is WatchReading.BloodPressure    -> live.copy(systolic = reading.systolic, diastolic = reading.diastolic)
-
-            // Pair systolic + diastolic arriving separately
-            is WatchReading.BloodPressure -> {
-                live.copy(systolic = reading.systolic, diastolic = reading.diastolic, heartRate = reading.heartRate)
-            }
+            is WatchReading.BloodPressure    -> live.copy(systolic = reading.systolic, diastolic = reading.diastolic, heartRate = reading.heartRate)
         }
         _latest.value = live
 
