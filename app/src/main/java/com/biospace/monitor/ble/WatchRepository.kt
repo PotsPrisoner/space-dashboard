@@ -105,7 +105,7 @@ class WatchRepository(context: Context) {
     private var activeSession: CorrelationSession? = null
 
     // Pending pairing for systolic→diastolic matching
-    private val pendingSystolic = mutableMapOf<String, Int>() // key = "HH:mm" → mmHg
+
 
     // Latest live readings accumulator
     private var live = WatchSnapshot()
@@ -198,15 +198,8 @@ class WatchRepository(context: Context) {
             is WatchReading.BloodPressure    -> live.copy(systolic = reading.systolic, diastolic = reading.diastolic)
 
             // Pair systolic + diastolic arriving separately
-            is WatchReading.Systolic -> {
-                val key = "${reading.hour}:${reading.minute}"
-                pendingSystolic[key] = reading.mmHg
-                live.copy(systolic = reading.mmHg)
-            }
-            is WatchReading.Diastolic -> {
-                val key = "${reading.hour}:${reading.minute}"
-                val sys = pendingSystolic.remove(key)
-                live.copy(diastolic = reading.mmHg, systolic = sys ?: live.systolic)
+            is WatchReading.BloodPressure -> {
+                live.copy(systolic = reading.systolic, diastolic = reading.diastolic, heartRate = reading.heartRate)
             }
         }
         _latest.value = live
