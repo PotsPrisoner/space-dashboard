@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
 private enum class NavTab(val label: String) {
     DASHBOARD("SPACE"), IMF("IMF"), SCHUMANN("SR"), ANS("ANS"),
     ENVIRONMENT("ENV"), CME("CME"), IMAGES("IMG"),
-    ASSESSMENT("ASSESS"), ALERTS("ALERTS"), CHAT("CHAT")
+    ASSESSMENT("ASSESS"), ALERTS("ALERTS"), CHAT("CHAT"), WATCH("WATCH")
 }
 
 @Composable
@@ -127,6 +127,7 @@ fun BioSpaceApp(onRequestGps: (callback: (android.location.Location) -> Unit) ->
                     NavTab.IMAGES -> SolarImagesScreen()
                     NavTab.ASSESSMENT -> AssessmentScreen(assessment)
                     NavTab.ALERTS -> AlertsScreen(sw.alerts)
+                    NavTab.WATCH -> WatchScreen(vm)
                     NavTab.CHAT -> ChatScreen(
                         messages = chat,
                         connected = chatConnected

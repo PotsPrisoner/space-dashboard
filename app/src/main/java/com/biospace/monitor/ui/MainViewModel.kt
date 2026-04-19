@@ -301,14 +301,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val data = ApiClient.noaa.getHemisphericPower()
             var north = Double.NaN; var south = Double.NaN
             try {
-                val obj = data.asJsonObject
-                north = obj.get("north_gw")?.asDouble ?: obj.get("Hemispheric Power")
-                    ?.asJsonObject?.let { it.get("north")?.asDouble ?: it.get("North")?.asDouble } ?: Double.NaN
-                south = obj.get("south_gw")?.asDouble ?: obj.get("Hemispheric Power")
-                    ?.asJsonObject?.let { it.get("south")?.asDouble ?: it.get("South")?.asDouble } ?: Double.NaN
+                // hemispheric_power.json returns array of [time, north_gw, south_gw]
+                if (data.isJsonArray) {
+                    val arr = data.asJsonArray
+                    val rows = arr.filter { it.isJsonArray && !it.asJsonArray[1].isJsonNull }
+                    if (rows.isNotEmpty()) {
+                        val last = rows.last().asJsonArray
+                        north = last[1].asDouble
+                        south = last[2].asDouble
+                    }
+                } else {
+                    val obj = data.asJsonObject
+                    north = obj.get("north_gw")?.asDouble ?: Double.NaN
+                    south = obj.get("south_gw")?.asDouble ?: Double.NaN
+                }
             } catch (_: Exception) {}
             if (north.isNaN() || south.isNaN()) {
-                // Derive from Kp
                 val kp = _spaceWeather.value.kp
                 north = kp * kp * 4.2 + 2
                 south = kp * kp * 0.9 * 4.2 + 2

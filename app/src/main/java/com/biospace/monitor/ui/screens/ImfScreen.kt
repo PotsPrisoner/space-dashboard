@@ -19,14 +19,14 @@ import com.biospace.monitor.model.SpaceWeatherState
 import com.biospace.monitor.ui.components.*
 import com.biospace.monitor.ui.theme.*
 
-private enum class ImfTab { BZ, BT, COMPONENTS, ALL }
+private enum class ImfTab { BZ, BT, COMPS, ALL }
 
 @Composable
 fun ImfScreen(sw: SpaceWeatherState) {
     var selectedTab by remember { mutableStateOf(ImfTab.BZ) }
 
     BioCard {
-        CardTitle("INTERPLANETARY MAGNETIC FIELD", "// 7-DAY")
+        CardTitle("IMF", "// INTERPLANETARY MAGNETIC FIELD · 7-DAY")
 
         // Tab row
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -54,7 +54,7 @@ fun ImfScreen(sw: SpaceWeatherState) {
         when (selectedTab) {
             ImfTab.BZ -> BzPanel(sw)
             ImfTab.BT -> BtPanel(sw)
-            ImfTab.COMPONENTS -> ComponentsPanel(sw)
+            ImfTab.COMPS -> ComponentsPanel(sw)
             ImfTab.ALL -> AllPanel(sw)
         }
     }

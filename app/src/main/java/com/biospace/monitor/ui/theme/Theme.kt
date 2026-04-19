@@ -9,7 +9,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 
 // BioSpace color palette
-val BgColor = Color(0xFF030910)
+val BgColor = Color(0xFF000000)
 val CardColor = Color(0xFF060D1C)
 val BorderColor = Color(0xFF112240)
 val BorderGlowColor = Color(0xFF1A3A6A)
