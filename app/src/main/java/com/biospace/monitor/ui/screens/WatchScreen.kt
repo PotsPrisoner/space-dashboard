@@ -220,17 +220,35 @@ fun WatchScreen(vm: MainViewModel) {
 // ─── Connection button ───────────────────────────────────────────────────────
 @Composable
 private fun ConnectionButton(state: ConnectionState, vm: MainViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val (label, color) = when (state) {
         ConnectionState.DISCONNECTED -> Pair("Connect", AccentTeal)
         ConnectionState.SCANNING     -> Pair("Scanning…", AccentAmber)
         ConnectionState.CONNECTING   -> Pair("Connecting…", AccentAmber)
         ConnectionState.CONNECTED    -> Pair("Connected ✓", AccentGreen)
     }
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        if (results.values.all { it }) vm.connectWatch()
+    }
     Button(
         onClick = {
             when (state) {
-                ConnectionState.DISCONNECTED -> vm.connectWatch()
-                ConnectionState.CONNECTED    -> vm.disconnectWatch()
+                ConnectionState.DISCONNECTED -> {
+                    val perms = mutableListOf(
+                        android.Manifest.permission.BLUETOOTH_SCAN,
+                        android.Manifest.permission.BLUETOOTH_CONNECT,
+                        android.Manifest.permission.ACCESS_FINE_LOCATION
+                    )
+                    val needed = perms.filter {
+                        androidx.core.content.ContextCompat.checkSelfPermission(context, it) !=
+                            android.content.pm.PackageManager.PERMISSION_GRANTED
+                    }
+                    if (needed.isEmpty()) vm.connectWatch()
+                    else permLauncher.launch(needed.toTypedArray())
+                }
+                ConnectionState.CONNECTED -> vm.disconnectWatch()
                 else -> {}
             }
         },
