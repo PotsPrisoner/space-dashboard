@@ -266,6 +266,88 @@ object ANSEngine {
     fun computeIntegratedAssessment(
         sw: SpaceWeatherState, sr: SRMetrics, weather: WeatherState
     ): IntegratedAssessment {
+        // Space score (0-40)
+        var spaceScore = 0
+        if (sw.kp > 1) spaceScore += (sw.kp * 3).toInt()
+        if (sw.kp > 3) spaceScore += 5
+        if (sw.kp > 5) spaceScore += 10
+        if (sw.bz < -2) spaceScore += (abs(sw.bz) * 2).toInt()
+        if (sw.bz > -2 && sw.bz < 2) spaceScore += 4
+        if (sw.speed > 400) spaceScore += ((sw.speed - 400) / 20).toInt()
+        if (sw.speed > 600) spaceScore += 5
+        if (sw.density > 8) spaceScore += 4
+        if (sw.density > 15) spaceScore += 6
+        val hpMax = maxOf(sw.hpNorth, sw.hpSouth)
+        if (hpMax > 30) spaceScore += 3
+        if (hpMax > 60) spaceScore += 5
+        if (hpMax > 100) spaceScore += 7
+        spaceScore = spaceScore.coerceAtMost(40)
+
+        // SR score (0-30)
+        var srScore = 0
+        if (sr.qFactor < 6) srScore += ((6 - sr.qFactor) * 4).toInt()
+        if (sr.qFactor < 3) srScore += 8
+        if (abs(sr.drift) > 0.05) srScore += 4
+        if (abs(sr.drift) > 0.2) srScore += 5
+        if (abs(sr.drift) > 0.5) srScore += 6
+        if (sr.intensity > 1.2) srScore += 4
+        if (sr.intensity > 2.0) srScore += 5
+        srScore = srScore.coerceAtMost(30)
+
+        // Env score (0-30)
+        var envScore = 0
+        val pressureDelta = if (weather.pressureHistory.size >= 2)
+            weather.pressureHistory.last() - weather.pressureHistory.first() else 0.0
+        val pressureAbs = weather.pressureHistory.lastOrNull() ?: 1013.0
+        if (pressureDelta < -1) envScore += 5
+        if (pressureDelta < -3) envScore += 6
+        if (pressureDelta < -6) envScore += 8
+        if (pressureAbs < 1005) envScore += 4
+        if (pressureAbs < 998) envScore += 5
+        if (weather.tempF > 85) envScore += ((weather.tempF - 85) / 3).toInt()
+        if (weather.tempF < 32) envScore += 6
+        if (weather.humidity > 70) envScore += 4
+        if (weather.humidity > 85) envScore += 5
+        if (weather.humidity < 20) envScore += 3
+        envScore = envScore.coerceAtMost(30)
+
+        // ANS contribution — scale loadIndex (0-100) to 0-30
+        val ans = computeANSLoad(sw, sr)
+        val ansContribution = (ans.loadIndex * 0.30).toInt().coerceAtMost(30)
+
+        // Integrated total — floor is worst subsystem percentage
+        val rawTotal = spaceScore + srScore + envScore + ansContribution
+        val subsystemWorst = maxOf(
+            (spaceScore * 100.0 / 40).toInt(),
+            (srScore * 100.0 / 30).toInt(),
+            (envScore * 100.0 / 30).toInt(),
+            ans.loadIndex
+        )
+        val total = maxOf(rawTotal, subsystemWorst / 2).coerceAtMost(100)
+
+        val label = when {
+            total > 75 -> "CRITICAL LOAD"
+            total > 55 -> "HIGH LOAD"
+            total > 35 -> "MODERATE LOAD"
+            total > 15 -> "LOW LOAD"
+            else -> "MINIMAL LOAD"
+        }
+
+        val narrative = buildNarrative(total, spaceScore, srScore, envScore, sw, sr, weather)
+
+        return IntegratedAssessment(
+            score = total,
+            label = label,
+            spaceScore = spaceScore,
+            srScore = srScore,
+            envScore = envScore,
+            narrative = narrative,
+            protocols = buildProtocol(total, sw, sr)
+        )
+    }
+    fun computeIntegratedAssessment(
+        sw: SpaceWeatherState, sr: SRMetrics, weather: WeatherState
+    ): IntegratedAssessment {
         // Space score
         var spaceScore = 0
         if (sw.kp > 2) spaceScore += (sw.kp * 3).toInt()
