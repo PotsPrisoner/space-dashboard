@@ -46,10 +46,6 @@ data class HpValues(
     fun southVal() = (south ?: southCap)?.toDoubleOrNull() ?: Double.NaN
 }
 
- {
-    fun northVal() = (north ?: northCap)?.toDoubleOrNull() ?: Double.NaN
-    fun southVal() = (south ?: southCap)?.toDoubleOrNull() ?: Double.NaN
-}
 
 // ── CME from NASA DONKI ───────────────────────────────────────────────────────
 data class CmeEvent(
