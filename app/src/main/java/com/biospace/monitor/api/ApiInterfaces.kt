@@ -23,7 +23,7 @@ interface NoaaApi {
     @GET("products/alerts.json")
     suspend fun getAlerts(): List<NoaaAlert>
 
-    @GET("json/ovation_aurora_latest.json")
+    @GET("json/hemispheric_power.json")
     suspend fun getHemisphericPower(): JsonElement
 }
 
