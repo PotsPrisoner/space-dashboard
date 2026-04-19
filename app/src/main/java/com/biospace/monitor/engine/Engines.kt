@@ -345,3 +345,32 @@ object ANSEngine {
             protocols = buildProtocol(total, sw, sr)
         )
     }
+
+    private fun buildNarrative(
+        total: Int, space: Int, sr: Int, env: Int,
+        sw: SpaceWeatherState, srM: SRMetrics, weather: WeatherState
+    ): String {
+        val spacePart = when {
+            sw.kp > 5 -> "a geomagnetic storm (Kp ${String.format("%.1f", sw.kp)}) is actively compressing the magnetosphere"
+            sw.kp > 3 -> "elevated geomagnetic activity (Kp ${String.format("%.1f", sw.kp)}) is disturbing the inner magnetosphere"
+            else -> "geomagnetic conditions are relatively quiet (Kp ${String.format("%.1f", sw.kp)})"
+        }
+        val srPart = when {
+            srM.qFactor < 3 -> "Schumann Resonance coherence is severely degraded (Q=${String.format("%.1f", srM.qFactor)}) — the Earth-ionosphere cavity is acting as a broadband noise source"
+            srM.qFactor < 4.5 -> "SR field coherence is reduced (Q=${String.format("%.1f", srM.qFactor)}), creating moderate ELF background noise"
+            else -> "SR field quality is adequate (Q=${String.format("%.1f", srM.qFactor)})"
+        }
+        val envPart = when {
+            weather.tempF > 90 -> "local heat load (${weather.tempF.toInt()}°F) is at a critical dysautonomia trigger threshold"
+            weather.tempF > 80 -> "local temperature (${weather.tempF.toInt()}°F) is elevated and adds meaningful thermal stress"
+            else -> "local environmental conditions are within manageable range (${weather.tempF.toInt()}°F)"
+        }
+        val overall = when {
+            total > 70 -> "This represents a CRITICAL BURDEN window. Significant dysautonomic flares should be anticipated."
+            total > 50 -> "This represents an elevated burden window. Geosensitive individuals should expect noticeable dysautonomic activity."
+            total > 30 -> "This is a moderate background load window. Those with poor baseline reserve may notice symptom clustering."
+            else -> "Conditions are in a relatively low-burden window — a favorable period for autonomic recovery."
+        }
+        return "As of this reading, $spacePart. Simultaneously, $srPart. On the ground, $envPart. $overall The integrated load index of $total/100 reflects the combined electromagnetic, ionospheric, and local environmental pressure on the autonomic nervous system at this moment."
+    }
+}
