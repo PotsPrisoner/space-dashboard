@@ -121,6 +121,14 @@ object WatchProtocol {
         val bytes = raw.map { it.toInt() and 0xFF }
 
         if (bytes.size < 5) return WatchReading.Unknown(-1, -1, raw)
+        // Handle 0xFF-header BP result packets as well as standard 0xAB packets
+        if (bytes[0] == 0xFF && bytes.size >= 15) {
+            // FF-00-0C-00-01-01-YY-MM-DD-HH-MIN-SS-SYS-DIA-??
+            val sys = bytes[12]
+            val dia = bytes[13]
+            if (sys in 60..250 && dia in 40..150)
+                return WatchReading.BloodPressure(nowMs, sys, dia)
+        }
         if (bytes[0] != 0xAB) return WatchReading.Unknown(-1, -1, raw)
 
         val cat = bytes[4]
@@ -245,14 +253,11 @@ object WatchProtocol {
             }
 
             CAT_VITALS_BUNDLE -> {
-                if (bytes.size < 11) return WatchReading.Unknown(cat, sub, raw)
-                val hr  = bytes[7]
-                val sys = bytes[9]
-                val dia = bytes[10]
-                if (sys in 60..250 && dia in 40..150)
-                    WatchReading.BloodPressure(nowMs, sys, dia)
-                else if (hr in 30..220)
-                    WatchReading.HeartRate(nowMs, hr)
+                // 0x92 packet is device state broadcast — only HR is reliable here
+                // BP comes via separate 0xFF-header packets
+                if (bytes.size < 8) return WatchReading.Unknown(cat, sub, raw)
+                val hr = bytes[7]
+                if (hr in 30..220) WatchReading.HeartRate(nowMs, hr)
                 else WatchReading.Unknown(cat, sub, raw)
             }
             CAT_STATUS -> {
