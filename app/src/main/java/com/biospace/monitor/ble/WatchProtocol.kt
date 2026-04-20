@@ -5,9 +5,9 @@ import java.util.Calendar
 
 object WatchProtocol {
 
-    val NUS_SERVICE: UUID   = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-    val NUS_TX_WRITE: UUID  = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
-    val NUS_RX_NOTIFY: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+    val NUS_SERVICE: UUID   = UUID.fromString("00000000-0000-0000-6473-5f696c666973")
+    val NUS_TX_WRITE: UUID  = UUID.fromString("00000000-0000-0100-6473-5f696c666973")
+    val NUS_RX_NOTIFY: UUID = UUID.fromString("00000000-0000-0200-6473-5f696c666973")
     val CCCD: UUID          = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
     // Category bytes (byte[4] in packet)
