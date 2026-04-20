@@ -5,9 +5,9 @@ import java.util.Calendar
 
 object WatchProtocol {
 
-    val NUS_SERVICE: UUID   = UUID.fromString("00000000-0000-0000-6473-5f696c666973")
-    val NUS_TX_WRITE: UUID  = UUID.fromString("00000000-0000-0100-6473-5f696c666973")
-    val NUS_RX_NOTIFY: UUID = UUID.fromString("00000000-0000-0200-6473-5f696c666973")
+    val NUS_SERVICE: UUID   = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+    val NUS_TX_WRITE: UUID  = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+    val NUS_RX_NOTIFY: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
     val CCCD: UUID          = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
     // Category bytes (byte[4] in packet)
@@ -16,6 +16,11 @@ object WatchProtocol {
     const val CAT_HISTORY        = 0x51
     const val CAT_SLEEP          = 0x52
     const val CAT_SPORT          = 0xB7
+    const val CAT_VITALS_BUNDLE  = 0x92
+    const val CAT_STATUS         = 0x91
+    const val CAT_MEAS_ACK       = 0x20
+    const val CAT_MEAS_RESULT    = 0x21
+    const val CAT_PPG_HISTORY    = 0x9E
 
     // Sub-commands under CAT_SINGLE_MEASURE (0x31)
     const val SUB_SINGLE_HR      = 0x09
@@ -239,6 +244,25 @@ object WatchProtocol {
                 )
             }
 
+            CAT_VITALS_BUNDLE -> {
+                if (bytes.size < 11) return WatchReading.Unknown(cat, sub, raw)
+                val hr  = bytes[7]
+                val sys = bytes[9]
+                val dia = bytes[10]
+                if (sys in 60..250 && dia in 40..150)
+                    WatchReading.BloodPressure(nowMs, sys, dia)
+                else if (hr in 30..220)
+                    WatchReading.HeartRate(nowMs, hr)
+                else WatchReading.Unknown(cat, sub, raw)
+            }
+            CAT_STATUS -> {
+                if (bytes.size < 8) return WatchReading.Unknown(cat, sub, raw)
+                val batt = bytes[7]
+                if (batt in 0..100) WatchReading.Battery(batt)
+                else WatchReading.Unknown(cat, sub, raw)
+            }
+            CAT_MEAS_ACK, CAT_MEAS_RESULT, CAT_PPG_HISTORY ->
+                WatchReading.Unknown(cat, sub, raw)
             else -> WatchReading.Unknown(cat, sub, raw)
         }
     }
