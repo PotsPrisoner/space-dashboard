@@ -125,12 +125,12 @@ class WatchBleManager(private val context: Context) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     Log.i(TAG, "GATT connected, discovering services")
-                    _connectionState.value = ConnectionState.CONNECTED
+                    mainHandler.post { _connectionState.value = ConnectionState.CONNECTED }
                     gatt.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     Log.i(TAG, "GATT disconnected status=$status")
-                    _connectionState.value = ConnectionState.DISCONNECTED
+                    mainHandler.post { _connectionState.value = ConnectionState.DISCONNECTED }
                     gatt.close()
                     bluetoothGatt = null
                 }
