@@ -144,6 +144,7 @@ class WatchBleManager(private val context: Context) {
             }
             logServices(gatt)
             enableNusNotifications(gatt)
+                    enableAutoMeasure()
         }
 
         override fun onCharacteristicChanged(
@@ -197,6 +198,11 @@ class WatchBleManager(private val context: Context) {
     }
 
     // ─── Send command to watch (NUS TX) ──────────────────────────────────────
+    private fun enableAutoMeasure() {
+        // Enable hourly auto-measurement so watch pushes live readings
+        sendCommand(byteArrayOf(0xAB.toByte(), 0x00, 0x04, 0xFF.toByte(), 0x78, 0x80.toByte(), 0x01))
+    }
+
     fun sendCommand(bytes: ByteArray): Boolean {
         val gatt = bluetoothGatt ?: return false
         val service = gatt.getService(WatchProtocol.NUS_SERVICE) ?: return false
