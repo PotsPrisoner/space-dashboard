@@ -78,6 +78,11 @@ object WatchProtocol {
             val score: Int
         ) : WatchReading()
 
+
+        data class Respiration(
+            val timestampMs: Long,
+            val breathsPerMin: Int
+        ) : WatchReading()
         data class Temperature(
             val timestampMs: Long,
             val celsius: Float

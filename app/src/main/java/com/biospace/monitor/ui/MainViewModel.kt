@@ -475,8 +475,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val spo2History   = watchRepo.spo2History
     val sleepHistory  = watchRepo.sleepHistory
     val stressHistory = watchRepo.stressHistory
-    val tempHistory   = watchRepo.tempHistory
-    val immHistory    = watchRepo.immHistory
     val stepsHistory  = watchRepo.stepsHistory
     val respiration   = watchRepo.respiration
     fun refreshWatch() = watchRepo.sendRefresh()

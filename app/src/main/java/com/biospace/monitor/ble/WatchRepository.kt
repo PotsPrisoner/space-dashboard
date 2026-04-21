@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 private const val TAG = "WatchRepository"
 
@@ -16,7 +17,7 @@ class WatchRepository(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val bleManager = WatchBleManager(context.applicationContext)
 
-    // ─── Per-metric latest-value flows ──────────────────────────────────────
+    // ── Latest-value flows ───────────────────────────────────────────────────
     private val _bloodPressure = MutableStateFlow<WatchReading.BloodPressure?>(null)
     val bloodPressure = _bloodPressure.asStateFlow()
 
@@ -35,11 +36,8 @@ class WatchRepository(context: Context) {
     private val _stress = MutableStateFlow<WatchReading.Stress?>(null)
     val stress = _stress.asStateFlow()
 
-    private val _temperature = MutableStateFlow<WatchReading.Temperature?>(null)
-    val temperature = _temperature.asStateFlow()
-
-    private val _immunity = MutableStateFlow<WatchReading.Immunity?>(null)
-    val immunity = _immunity.asStateFlow()
+    private val _respiration = MutableStateFlow<WatchReading.Respiration?>(null)
+    val respiration = _respiration.asStateFlow()
 
     private val _hourlyBundle = MutableStateFlow<WatchReading.HourlyBundle?>(null)
     val hourlyBundle = _hourlyBundle.asStateFlow()
@@ -50,49 +48,43 @@ class WatchRepository(context: Context) {
     private val _battery = MutableStateFlow(-1)
     val battery = _battery.asStateFlow()
 
-    // History ring buffers (most recent 200 of each)
-    private val _bpHistory      = MutableStateFlow<List<WatchReading.BloodPressure>>(emptyList())
+    // ── History ring buffers ─────────────────────────────────────────────────
+    private val _bpHistory     = MutableStateFlow<List<WatchReading.BloodPressure>>(emptyList())
     val bpHistory = _bpHistory.asStateFlow()
 
-    private val _hrHistory      = MutableStateFlow<List<WatchReading.HeartRate>>(emptyList())
+    private val _hrHistory     = MutableStateFlow<List<WatchReading.HeartRate>>(emptyList())
     val hrHistory = _hrHistory.asStateFlow()
 
-    private val _spo2History    = MutableStateFlow<List<WatchReading.SpO2>>(emptyList())
+    private val _spo2History   = MutableStateFlow<List<WatchReading.SpO2>>(emptyList())
     val spo2History = _spo2History.asStateFlow()
 
-    private val _sleepHistory   = MutableStateFlow<List<WatchReading.Sleep>>(emptyList())
+    private val _sleepHistory  = MutableStateFlow<List<WatchReading.Sleep>>(emptyList())
     val sleepHistory = _sleepHistory.asStateFlow()
 
-    private val _stressHistory  = MutableStateFlow<List<WatchReading.Stress>>(emptyList())
+    private val _stressHistory = MutableStateFlow<List<WatchReading.Stress>>(emptyList())
     val stressHistory = _stressHistory.asStateFlow()
 
-    private val _tempHistory    = MutableStateFlow<List<WatchReading.Temperature>>(emptyList())
-    val tempHistory = _tempHistory.asStateFlow()
-
-    private val _immHistory     = MutableStateFlow<List<WatchReading.Immunity>>(emptyList())
-    val immHistory = _immHistory.asStateFlow()
-
-    private val _stepsHistory   = MutableStateFlow<List<WatchReading.Steps>>(emptyList())
+    private val _stepsHistory  = MutableStateFlow<List<WatchReading.Steps>>(emptyList())
     val stepsHistory = _stepsHistory.asStateFlow()
 
-    // ─── Connection passthrough ──────────────────────────────────────────────
+    private val _respHistory   = MutableStateFlow<List<WatchReading.Respiration>>(emptyList())
+    val respHistory = _respHistory.asStateFlow()
+
+    // ── Connection passthrough ───────────────────────────────────────────────
     val connectionState = bleManager.connectionState
     val lastKnownDevice = bleManager.lastKnownDevice
 
-    // ─── Dispatch incoming readings ──────────────────────────────────────────
+    // ── Init ─────────────────────────────────────────────────────────────────
     init {
         scope.launch {
-            bleManager.readings.filterNotNull().collect { reading ->
-                dispatch(reading)
-            }
+            bleManager.readings.filterNotNull().collect { dispatch(it) }
         }
         scope.launch {
-            bleManager.batteryLevel.collect { level ->
-                if (level >= 0) _battery.value = level
-            }
+            bleManager.batteryLevel.collect { if (it >= 0) _battery.value = it }
         }
     }
 
+    // ── Dispatch ─────────────────────────────────────────────────────────────
     private fun dispatch(reading: WatchReading) {
         Log.v(TAG, "dispatch: $reading")
         when (reading) {
@@ -120,17 +112,12 @@ class WatchRepository(context: Context) {
                 _stress.value = reading
                 _stressHistory.value = (_stressHistory.value + reading).takeLast(200)
             }
-            is WatchReading.Temperature -> {
-                _temperature.value = reading
-                _tempHistory.value = (_tempHistory.value + reading).takeLast(200)
-            }
-            is WatchReading.Immunity -> {
-                _immunity.value = reading
-                _immHistory.value = (_immHistory.value + reading).takeLast(200)
+            is WatchReading.Respiration -> {
+                _respiration.value = reading
+                _respHistory.value = (_respHistory.value + reading).takeLast(200)
             }
             is WatchReading.HourlyBundle -> {
                 _hourlyBundle.value = reading
-                // Fan-out hourly bundle into individual metric flows too
                 if (reading.heartRate > 0) {
                     val hr = WatchReading.HeartRate(reading.timestampMs, reading.heartRate)
                     _heartRate.value = hr
@@ -161,17 +148,33 @@ class WatchRepository(context: Context) {
                 if (reading.systolic > 0 && reading.diastolic > 0) _bloodPressure.value =
                     WatchReading.BloodPressure(reading.timestampMs, reading.systolic, reading.diastolic)
             }
-            is WatchReading.Battery -> _battery.value = reading.percent
+            is WatchReading.Battery  -> _battery.value = reading.percent
             is WatchReading.SyncDone -> Log.i(TAG, "Sync complete")
-            is WatchReading.Unknown -> { /* already logged in BleManager */ }
+            is WatchReading.Unknown  -> { /* already logged in BleManager */ }
+            else                     -> { /* future reading types */ }
         }
     }
 
-    // ─── Actions ─────────────────────────────────────────────────────────────
-    fun connect() = bleManager.startScan()
+    // ── Actions ──────────────────────────────────────────────────────────────
+    fun connect()              = bleManager.startScan()
     fun connectTo(mac: String) = bleManager.connectTo(mac)
-    fun disconnect() = bleManager.disconnect()
-    fun close() = bleManager.close()
+    fun disconnect()           = bleManager.disconnect()
+    fun close()                = bleManager.close()
+
+    fun sendRefresh() {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_MONTH, -7)
+        val year  = (cal.get(Calendar.YEAR) - 2000).toByte()
+        val month = (cal.get(Calendar.MONTH) + 1).toByte()
+        val day   = cal.get(Calendar.DAY_OF_MONTH).toByte()
+        val cmd   = byteArrayOf(
+            0xAB.toByte(), 0x00, 0x07, 0xFF.toByte(),
+            0x52.toByte(), 0x80.toByte(), 0x00,
+            year, month, day
+        )
+        bleManager.sendCommand(cmd)
+        Log.i(TAG, "sendRefresh: requesting sync from 7 days ago")
+    }
 
     companion object {
         @Volatile private var INSTANCE: WatchRepository? = null

@@ -152,7 +152,7 @@ fun DashboardScreen(sw: SpaceWeatherState) {
                 Spacer(Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(modifier = Modifier.weight(1f)) {
-                        SmoothSmoothSparkline(
+                        SmoothSparkline(
                             values = sw.speedHistory.takeLast(60),
                             color = CyanColor,
                             modifier = Modifier.fillMaxWidth().height(50.dp)
@@ -160,7 +160,7 @@ fun DashboardScreen(sw: SpaceWeatherState) {
                         Text("SPEED 1HR", color = DimColor, fontSize = 7.sp, letterSpacing = 2.sp)
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        SmoothSmoothSparkline(
+                        SmoothSparkline(
                             values = sw.densityHistory.takeLast(60),
                             color = GreenColor,
                             modifier = Modifier.fillMaxWidth().height(50.dp)
