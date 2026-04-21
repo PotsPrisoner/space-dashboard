@@ -467,8 +467,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val steps         = watchRepo.steps
     val sleep         = watchRepo.sleep
     val stress        = watchRepo.stress
-    val temperature   = watchRepo.temperature
-    val immunity      = watchRepo.immunity
     val hourlyBundle  = watchRepo.hourlyBundle
     val oneKeyBundle  = watchRepo.oneKeyBundle
 
@@ -480,6 +478,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val tempHistory   = watchRepo.tempHistory
     val immHistory    = watchRepo.immHistory
     val stepsHistory  = watchRepo.stepsHistory
+    val respiration   = watchRepo.respiration
+    fun refreshWatch() = watchRepo.sendRefresh()
 
     fun connectWatch()              = watchRepo.connect()
     fun disconnectWatch()           = watchRepo.disconnect()
