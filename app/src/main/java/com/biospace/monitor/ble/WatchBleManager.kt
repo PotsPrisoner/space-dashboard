@@ -171,6 +171,11 @@ class WatchBleManager(private val context: Context) {
         ) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.i(TAG, "CCCD written — NUS notifications enabled")
+                mainHandler.postDelayed({
+                    enableAutoMeasure()
+                    sendRefresh()
+                    Log.i(TAG, "Auto-refresh triggered after CCCD")
+                }, 600)
             } else {
                 Log.e(TAG, "CCCD write failed status=$status")
             }
@@ -201,6 +206,18 @@ class WatchBleManager(private val context: Context) {
     private fun enableAutoMeasure() {
         // Enable hourly auto-measurement so watch pushes live readings
         sendCommand(byteArrayOf(0xAB.toByte(), 0x00, 0x04, 0xFF.toByte(), 0x78, 0x80.toByte(), 0x01))
+    }
+
+    fun sendRefresh() {
+        val cal = java.util.Calendar.getInstance()
+        cal.add(java.util.Calendar.DAY_OF_MONTH, -7)
+        val year  = (cal.get(java.util.Calendar.YEAR) - 2000).toByte()
+        val month = (cal.get(java.util.Calendar.MONTH) + 1).toByte()
+        val day   = cal.get(java.util.Calendar.DAY_OF_MONTH).toByte()
+        val cmd   = byteArrayOf(0xAB.toByte(), 0x00, 0x07, 0xFF.toByte(),
+            0x52.toByte(), 0x80.toByte(), 0x00, year, month, day)
+        sendCommand(cmd)
+        Log.i(TAG, "sendRefresh: sent history sync command")
     }
 
     fun sendCommand(bytes: ByteArray): Boolean {
