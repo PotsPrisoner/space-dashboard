@@ -111,7 +111,7 @@ fun DashboardScreen(sw: SpaceWeatherState) {
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         NeonSpeedometer(
-                            fraction = ((sw.speed - 200) / 800f).coerceIn(0f, 1f),
+                            fraction = ((sw.speed.toFloat() - 200f) / 800f).coerceIn(0f, 1f),
                             value = "${sw.speed.toInt()}",
                             unit = "km/s",
                             color = speedColor(sw.speed),
@@ -124,7 +124,7 @@ fun DashboardScreen(sw: SpaceWeatherState) {
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         NeonSpeedometer(
-                            fraction = (sw.density / 30f).coerceIn(0f, 1f),
+                            fraction = (sw.density.toFloat() / 30f).coerceIn(0f, 1f),
                             value = String.format("%.1f", sw.density),
                             unit = "p/cm³",
                             color = GreenColor,

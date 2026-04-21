@@ -358,11 +358,12 @@ fun WatchScreen(vm: MainViewModel) {
                     ) {
                         CircularGauge(
                             fraction = (effStress / 100f).coerceIn(0f, 1f),
-                            value = if (effStress > 0) "$effStress" else "—",
-                            label = "/ 100",
                             color = stressColor(effStress),
                             size = 120.dp
-                        )
+                        ) {
+                            Text(if (effStress > 0) "$effStress" else "—", color = stressColor(effStress), fontSize = 20.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            Text("/ 100", color = DimColor, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                        }
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.padding(start = 16.dp)
