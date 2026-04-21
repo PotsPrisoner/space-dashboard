@@ -253,7 +253,7 @@ object WatchProtocol {
                 WatchReading.Sleep(
                     timestampMs     = timestampFromBytes(bytes, 6),
                     type            = bytes[11],
-                    durationMinutes = (bytes[12] shl 8) + bytes[13]
+                    durationMinutes = bytes[12] + bytes[13]
                 )
             }
 
