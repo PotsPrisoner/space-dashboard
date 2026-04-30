@@ -1,0 +1,54 @@
+[
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/drawable_ic_splash.xml.flat",
+        "source": "com.biospace.monitor.app-main-81:/drawable/ic_splash.xml"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/xml_network_security_config.xml.flat",
+        "source": "com.biospace.monitor.app-main-81:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.biospace.monitor.app-main-81:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.biospace.monitor.app-debug-79:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.biospace.monitor.app-main-81:/mipmap-hdpi/ic_launcher_round.png"
+    }
+]

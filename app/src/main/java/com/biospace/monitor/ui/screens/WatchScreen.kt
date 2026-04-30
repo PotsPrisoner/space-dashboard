@@ -1,394 +1,156 @@
 package com.biospace.monitor.ui.screens
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import android.Manifest
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import com.biospace.monitor.ble.WatchBleManager.ConnectionState
-import com.biospace.monitor.ble.WatchProtocol.WatchReading
+import androidx.compose.ui.text.font.*
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.*
+import com.biospace.monitor.data.Biometrics
 import com.biospace.monitor.ui.MainViewModel
-import java.text.SimpleDateFormat
-import java.util.*
-
-private val CardBg    = Color(0xFF1A1A2E)
-private val AccentRed = Color(0xFFE94560)
-private val AccentTeal = Color(0xFF00B4D8)
-private val AccentGreen = Color(0xFF4CAF50)
-private val AccentAmber = Color(0xFFFFAB00)
-private val AccentPurple = Color(0xFF9C27B0)
-private val AccentOrange = Color(0xFFFF5722)
+import com.biospace.monitor.ui.theme.*
 
 @Composable
 fun WatchScreen(vm: MainViewModel) {
-    val connection by vm.watchConnectionState.collectAsState()
-    val bp         by vm.bloodPressure.collectAsState()
-    val hr         by vm.heartRate.collectAsState()
-    val spo2       by vm.spO2.collectAsState()
-    val steps      by vm.steps.collectAsState()
-    val sleep      by vm.sleep.collectAsState()
-    val stress     by vm.stress.collectAsState()
-    val temp       by vm.temperature.collectAsState()
-    val immunity   by vm.immunity.collectAsState()
-    val battery    by vm.watchBattery.collectAsState()
-    val device     by vm.watchDevice.collectAsState()
+    val bio by vm.bio.collectAsState()
+    var showManual by remember { mutableStateOf(!bio.isWatchConnected) }
+    var mHr    by remember { mutableStateOf(if(bio.heartRate>0) bio.heartRate.toString() else "") }
+    var mSys   by remember { mutableStateOf(if(bio.bpSys>0) bio.bpSys.toString() else "") }
+    var mDia   by remember { mutableStateOf(if(bio.bpDia>0) bio.bpDia.toString() else "") }
+    var mSpo2  by remember { mutableStateOf(if(bio.spO2>0) bio.spO2.toString() else "") }
+    var mStress by remember { mutableStateOf(if(bio.stressScore>0) bio.stressScore.toString() else "") }
+    var mSleep  by remember { mutableStateOf(if(bio.sleepHours>0f) bio.sleepHours.toString() else "") }
+    var mResp   by remember { mutableStateOf(if(bio.respirationRate>0) bio.respirationRate.toString() else "") }
+    var mRmssd  by remember { mutableStateOf(if(bio.rmssd>0f) bio.rmssd.toString() else "") }
+    var mSteps  by remember { mutableStateOf(if(bio.steps>0) bio.steps.toString() else "") }
 
-    val bpHistory    by vm.bpHistory.collectAsState()
-    val hrHistory    by vm.hrHistory.collectAsState()
-    val spo2History  by vm.spo2History.collectAsState()
-    val sleepHistory by vm.sleepHistory.collectAsState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0F0F1A))
-            .padding(horizontal = 12.dp)
-    ) {
-        // ── Header ─────────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+    Column(Modifier.fillMaxSize().background(BgColor).verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
-                Text("BP Doctor Watch", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    device?.address ?: "Not paired",
-                    color = Color.Gray, fontSize = 12.sp
-                )
+                Text("BIOMETRICS", color = CyanColor, fontSize = 11.sp, letterSpacing = 3.sp, fontFamily = FontFamily.Monospace)
+                Text(if (bio.isWatchConnected) "● WATCH CONNECTED" else "○ DISCONNECTED",
+                    color = if (bio.isWatchConnected) GreenColor else DimColor, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (battery >= 0) {
-                    Text("🔋 $battery%", color = Color.White, fontSize = 13.sp)
-                }
-                ConnectionButton(connection, vm)
+            Button(onClick = { if (bio.isWatchConnected) vm.watchRepo.disconnect() else vm.watchRepo.connect() },
+                colors = ButtonDefaults.buttonColors(containerColor = if (bio.isWatchConnected) RedColor.copy(0.2f) else CyanColor.copy(0.2f))) {
+                Text(if (bio.isWatchConnected) "DISCONNECT" else "CONNECT WATCH",
+                    color = if (bio.isWatchConnected) RedColor else CyanColor, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
             }
         }
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
-        ) {
-            // ── Blood Pressure ────────────────────────────────────────────
-            item {
-                MetricCard(
-                    title = "Blood Pressure",
-                    icon = "🩸",
-                    color = AccentRed
-                ) {
-                    bp?.let {
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
-                            BigValue("${it.systolic}", "mmHg", "SYS")
-                            Text("/", color = Color.White, fontSize = 28.sp)
-                            BigValue("${it.diastolic}", "mmHg", "DIA")
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        BpCategory(it.systolic, it.diastolic)
-                        Text(formatTime(it.timestampMs), color = Color.Gray, fontSize = 11.sp)
-                    } ?: EmptyState("Waiting for reading…")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = showManual, onCheckedChange = { showManual = it },
+                colors = SwitchDefaults.colors(checkedThumbColor = CyanColor, checkedTrackColor = CyanColor.copy(0.3f)))
+            Spacer(Modifier.width(8.dp))
+            Text("MANUAL INPUT", color = if (showManual) CyanColor else DimColor, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+        }
 
-                    if (bpHistory.size > 1) {
-                        Spacer(Modifier.height(8.dp))
-                        Text("History", color = Color.Gray, fontSize = 11.sp)
-                        MiniHistoryRow(bpHistory.takeLast(8).map { "${it.systolic}/${it.diastolic}" })
+        if (showManual) {
+            Card(colors = CardDefaults.cardColors(containerColor = CardBg),
+                border = BorderStroke(1.dp, CyanColor.copy(0.3f)), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("ENTER YOUR VITALS", color = CyanColor, fontSize = 9.sp, letterSpacing = 2.sp, fontFamily = FontFamily.Monospace)
+                    Text("Watch data overrides manual when connected.", color = DimColor, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        VInput("HEART RATE (bpm)", mHr, { mHr = it }, Modifier.weight(1f))
+                        VInput("SpO2 (%)", mSpo2, { mSpo2 = it }, Modifier.weight(1f))
                     }
-                }
-            }
-
-            // ── Heart Rate ────────────────────────────────────────────────
-            item {
-                MetricCard("Heart Rate", "❤️", AccentRed) {
-                    hr?.let {
-                        BigValue("${it.bpm}", "BPM", "Heart Rate")
-                        HrCategory(it.bpm)
-                        Text(formatTime(it.timestampMs), color = Color.Gray, fontSize = 11.sp)
-                    } ?: EmptyState("Waiting for reading…")
-
-                    if (hrHistory.size > 1) {
-                        Spacer(Modifier.height(8.dp))
-                        MiniHistoryRow(hrHistory.takeLast(8).map { "${it.bpm} bpm" })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        VInput("BP SYSTOLIC", mSys, { mSys = it }, Modifier.weight(1f))
+                        VInput("BP DIASTOLIC", mDia, { mDia = it }, Modifier.weight(1f))
                     }
-                }
-            }
-
-            // ── SpO2 ──────────────────────────────────────────────────────
-            item {
-                MetricCard("Blood Oxygen (SpO₂)", "💨", AccentTeal) {
-                    spo2?.let {
-                        BigValue("${it.percent}", "%", "SpO₂")
-                        Spo2Category(it.percent)
-                        Text(formatTime(it.timestampMs), color = Color.Gray, fontSize = 11.sp)
-                    } ?: EmptyState("Waiting for reading…")
-
-                    if (spo2History.size > 1) {
-                        Spacer(Modifier.height(8.dp))
-                        MiniHistoryRow(spo2History.takeLast(8).map { "${it.percent}%" })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        VInput("HRV RMSSD (ms)", mRmssd, { mRmssd = it }, Modifier.weight(1f))
+                        VInput("STRESS (0-100)", mStress, { mStress = it }, Modifier.weight(1f))
                     }
-                }
-            }
-
-            // ── Steps + Calories ──────────────────────────────────────────
-            item {
-                MetricCard("Activity", "👟", AccentGreen) {
-                    steps?.let {
-                        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                            BigValue("${it.count}", "steps", "Steps")
-                            BigValue("${it.kcal}", "kcal", "Calories")
-                        }
-                        Text(formatTime(it.timestampMs), color = Color.Gray, fontSize = 11.sp)
-                    } ?: EmptyState("Waiting for reading…")
-                }
-            }
-
-            // ── Sleep ─────────────────────────────────────────────────────
-            item {
-                MetricCard("Sleep", "🌙", AccentPurple) {
-                    if (sleepHistory.isNotEmpty()) {
-                        val deepMins  = sleepHistory.filter { it.type == 2 }.sumOf { it.durationMinutes }
-                        val lightMins = sleepHistory.filter { it.type == 1 }.sumOf { it.durationMinutes }
-                        val awakeMins = sleepHistory.filter { it.type == 0 }.sumOf { it.durationMinutes }
-                        val total     = deepMins + lightMins
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            BigValue("${total / 60}h ${total % 60}m", "", "Total")
-                            BigValue("${deepMins}m", "", "Deep")
-                            BigValue("${lightMins}m", "", "Light")
-                            BigValue("${awakeMins}m", "", "Awake")
-                        }
-                    } else {
-                        sleep?.let {
-                            val typeName = when (it.type) { 2 -> "Deep Sleep" 1 -> "Light Sleep" else -> "Awake" }
-                            BigValue("${it.durationMinutes}m", "", typeName)
-                        } ?: EmptyState("Waiting for reading…")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        VInput("SLEEP (hrs)", mSleep, { mSleep = it }, Modifier.weight(1f))
+                        VInput("RESP RATE (brpm)", mResp, { mResp = it }, Modifier.weight(1f))
                     }
-                }
-            }
-
-            // ── Stress ────────────────────────────────────────────────────
-            item {
-                MetricCard("Stress", "🧠", AccentAmber) {
-                    stress?.let {
-                        BigValue("${it.score}", "/100", "Stress Index")
-                        StressCategory(it.score)
-                        Text(formatTime(it.timestampMs), color = Color.Gray, fontSize = 11.sp)
-                    } ?: EmptyState("Waiting for reading…")
-                }
-            }
-
-            // ── Temperature ───────────────────────────────────────────────
-            item {
-                MetricCard("Body Temperature", "🌡️", AccentOrange) {
-                    temp?.let {
-                        BigValue("${"%.1f".format(it.celsius)}°C", "", "Temp")
-                        val f = it.celsius * 9f / 5f + 32f
-                        Text("${"%.1f".format(f)}°F", color = Color.Gray, fontSize = 13.sp)
-                        Text(formatTime(it.timestampMs), color = Color.Gray, fontSize = 11.sp)
-                    } ?: EmptyState("Waiting for reading…")
-                }
-            }
-
-            // ── Immunity ──────────────────────────────────────────────────
-            item {
-                MetricCard("Immunity", "🛡️", AccentTeal) {
-                    immunity?.let {
-                        BigValue("${it.score}", "/100", "Immunity Score")
-                        ImmunityCategory(it.score)
-                        Text(formatTime(it.timestampMs), color = Color.Gray, fontSize = 11.sp)
-                    } ?: EmptyState("Waiting for reading…")
+                    VInput("STEPS", mSteps, { mSteps = it }, Modifier.fillMaxWidth())
+                    Button(onClick = {
+                        vm.watchRepo.updateManual(bio.copy(
+                            heartRate = mHr.toIntOrNull() ?: bio.heartRate,
+                            bpSys = mSys.toIntOrNull() ?: bio.bpSys,
+                            bpDia = mDia.toIntOrNull() ?: bio.bpDia,
+                            spO2 = mSpo2.toIntOrNull() ?: bio.spO2,
+                            stressScore = mStress.toIntOrNull() ?: bio.stressScore,
+                            sleepHours = mSleep.toFloatOrNull() ?: bio.sleepHours,
+                            respirationRate = mResp.toIntOrNull() ?: bio.respirationRate,
+                            rmssd = mRmssd.toFloatOrNull() ?: bio.rmssd,
+                            steps = mSteps.toIntOrNull() ?: bio.steps,
+                            hrSource = if (mHr.isNotBlank()) "MANUAL" else bio.hrSource,
+                            bpSource = if (mSys.isNotBlank()) "MANUAL" else bio.bpSource,
+                            spO2Source = if (mSpo2.isNotBlank()) "MANUAL" else bio.spO2Source,
+                            hrvSource = if (mRmssd.isNotBlank()) "MANUAL" else bio.hrvSource
+                        ))
+                    }, modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = CyanColor.copy(0.2f))) {
+                        Text("APPLY VITALS", color = CyanColor, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    }
                 }
             }
         }
-    }
-}
 
-// ─── Connection button ───────────────────────────────────────────────────────
-@Composable
-private fun ConnectionButton(state: ConnectionState, vm: MainViewModel) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val (label, color) = when (state) {
-        ConnectionState.DISCONNECTED -> Pair("Connect", AccentTeal)
-        ConnectionState.SCANNING     -> Pair("Scanning…", AccentAmber)
-        ConnectionState.CONNECTING   -> Pair("Connecting…", AccentAmber)
-        ConnectionState.CONNECTED    -> Pair("Connected ✓", AccentGreen)
-    }
-    val permLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        if (results.values.all { it }) vm.connectWatchTo("C0:29:AB:60:4D:10")
-    }
-    Button(
-        onClick = {
-            when (state) {
-                ConnectionState.DISCONNECTED -> {
-                    val perms = mutableListOf(
-                        android.Manifest.permission.BLUETOOTH_SCAN,
-                        android.Manifest.permission.BLUETOOTH_CONNECT,
-                        android.Manifest.permission.ACCESS_FINE_LOCATION
-                    )
-                    val needed = perms.filter {
-                        androidx.core.content.ContextCompat.checkSelfPermission(context, it) !=
-                            android.content.pm.PackageManager.PERMISSION_GRANTED
-                    }
-                    if (needed.isEmpty()) vm.connectWatchTo("C0:29:AB:60:4D:10")
-                    else permLauncher.launch(needed.toTypedArray())
-                }
-                ConnectionState.CONNECTED -> vm.disconnectWatch()
-                else -> {}
-            }
-        },
-        colors = ButtonDefaults.buttonColors(containerColor = color),
-        shape = RoundedCornerShape(20.dp),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-    ) {
-        Text(label, fontSize = 12.sp, color = Color.White)
-    }
-}
-
-// ─── Reusable card ────────────────────────────────────────────────────────────
-@Composable
-private fun MetricCard(title: String, icon: String, color: Color, content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(color.copy(alpha = 0.2f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) { Text(icon, fontSize = 18.sp) }
-                Spacer(Modifier.width(10.dp))
-                Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            }
-            Spacer(Modifier.height(12.dp))
-            content()
+        Text("CURRENT READINGS", color = DimColor, fontSize = 9.sp, letterSpacing = 2.sp, fontFamily = FontFamily.Monospace)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BioCard("HEART RATE", if(bio.heartRate>0) "${bio.heartRate}" else "—", "bpm", bio.hrSource,
+                when { bio.heartRate>100->RedColor; bio.heartRate in 1..59->AmberColor; bio.heartRate>0->GreenColor; else->DimColor }, Modifier.weight(1f))
+            BioCard("SpO2", if(bio.spO2>0) "${bio.spO2}" else "—", "%", bio.spO2Source,
+                when { bio.spO2 in 1..92->RedColor; bio.spO2 in 93..95->AmberColor; bio.spO2>95->GreenColor; else->DimColor }, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BioCard("BLOOD PRESSURE", if(bio.bpSys>0) "${bio.bpSys}/${bio.bpDia}" else "—", "mmHg", bio.bpSource,
+                when { bio.bpSys>140->RedColor; bio.bpSys in 1..90->AmberColor; bio.bpSys>0->GreenColor; else->DimColor }, Modifier.weight(1f))
+            BioCard("HRV RMSSD", if(bio.rmssd>0) "${bio.rmssd.toInt()}" else "—", "ms", bio.hrvSource,
+                when { bio.rmssd in 0.1f..20f->RedColor; bio.rmssd in 20f..35f->AmberColor; bio.rmssd>35f->GreenColor; else->DimColor }, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BioCard("SLEEP", if(bio.sleepHours>0) "${"%.1f".format(bio.sleepHours)}" else "—", "hrs", "WATCH",
+                when { bio.sleepHours in 0.1f..5f->RedColor; bio.sleepHours in 5f..7f->AmberColor; bio.sleepHours>7f->GreenColor; else->DimColor }, Modifier.weight(1f))
+            BioCard("STRESS", if(bio.stressScore>0) "${bio.stressScore}" else "—", "/100", "WATCH",
+                when { bio.stressScore>70->RedColor; bio.stressScore>40->AmberColor; bio.stressScore>0->GreenColor; else->DimColor }, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BioCard("STEPS", if(bio.steps>0) "${bio.steps}" else "—", "", "WATCH", CyanColor, Modifier.weight(1f))
+            BioCard("RESP RATE", if(bio.respirationRate>0) "${bio.respirationRate}" else "—", "brpm", "MANUAL", CyanColor, Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun BigValue(value: String, unit: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
-            if (unit.isNotEmpty()) {
-                Spacer(Modifier.width(4.dp))
-                Text(unit, color = Color.Gray, fontSize = 14.sp,
-                    modifier = Modifier.padding(bottom = 6.dp))
+fun VInput(label: String, value: String, onChange: (String)->Unit, modifier: Modifier) {
+    OutlinedTextField(value = value, onValueChange = onChange,
+        label = { Text(label, fontSize = 8.sp, fontFamily = FontFamily.Monospace) },
+        modifier = modifier, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CyanColor, unfocusedBorderColor = BorderColor,
+            focusedTextColor = TextColor, unfocusedTextColor = TextColor, containerColor = CardBg, cursorColor = CyanColor,
+            focusedLabelColor = CyanColor, unfocusedLabelColor = DimColor),
+        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp))
+}
+
+@Composable
+fun BioCard(label: String, value: String, unit: String, source: String, color: Color, modifier: Modifier) {
+    Card(colors = CardDefaults.cardColors(containerColor = CardBg),
+        border = BorderStroke(1.dp, BorderColor), modifier = modifier) {
+        Column(Modifier.padding(10.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(label, color = DimColor, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                Text(source, color = if (source=="WATCH") CyanColor else AmberColor, fontSize = 7.sp, fontFamily = FontFamily.Monospace)
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(value, color = color, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                if (unit.isNotBlank()) Text(" $unit", color = DimColor, fontSize = 9.sp, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(bottom = 3.dp))
             }
         }
-        Text(label, color = Color.Gray, fontSize = 11.sp)
     }
-}
-
-@Composable
-private fun MiniHistoryRow(items: List<String>) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(items) { label ->
-            Text(
-                label,
-                color = Color.White,
-                fontSize = 11.sp,
-                modifier = Modifier
-                    .background(Color(0xFF2A2A3E), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun EmptyState(msg: String) {
-    Text(msg, color = Color.Gray, fontSize = 13.sp, modifier = Modifier.fillMaxWidth(),
-        textAlign = TextAlign.Center)
-}
-
-// ─── Category labels ──────────────────────────────────────────────────────────
-@Composable
-private fun BpCategory(sys: Int, dia: Int) {
-    val (label, color) = when {
-        sys < 120 && dia < 80  -> "Normal" to AccentGreen
-        sys < 130 && dia < 80  -> "Elevated" to AccentAmber
-        sys < 140 || dia < 90  -> "High Stage 1" to AccentOrange
-        else                   -> "High Stage 2" to AccentRed
-    }
-    CategoryChip(label, color)
-}
-
-@Composable
-private fun HrCategory(bpm: Int) {
-    val (label, color) = when {
-        bpm < 60  -> "Bradycardia" to AccentTeal
-        bpm <= 100 -> "Normal" to AccentGreen
-        bpm <= 150 -> "Elevated" to AccentAmber
-        else       -> "High" to AccentRed
-    }
-    CategoryChip(label, color)
-}
-
-@Composable
-private fun Spo2Category(pct: Int) {
-    val (label, color) = when {
-        pct >= 95  -> "Normal" to AccentGreen
-        pct >= 90  -> "Low" to AccentAmber
-        else       -> "Critical" to AccentRed
-    }
-    CategoryChip(label, color)
-}
-
-@Composable
-private fun StressCategory(score: Int) {
-    val (label, color) = when {
-        score <= 29 -> "Relaxed" to AccentGreen
-        score <= 59 -> "Normal" to AccentTeal
-        score <= 79 -> "Elevated" to AccentAmber
-        else        -> "High Stress" to AccentRed
-    }
-    CategoryChip(label, color)
-}
-
-@Composable
-private fun ImmunityCategory(score: Int) {
-    val (label, color) = when {
-        score >= 80 -> "Strong" to AccentGreen
-        score >= 60 -> "Average" to AccentAmber
-        else        -> "Low" to AccentRed
-    }
-    CategoryChip(label, color)
-}
-
-@Composable
-private fun CategoryChip(label: String, color: Color) {
-    Text(
-        label,
-        color = color,
-        fontSize = 11.sp,
-        modifier = Modifier
-            .background(color.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 3.dp)
-    )
-}
-
-private fun formatTime(ms: Long): String {
-    if (ms == 0L) return ""
-    return SimpleDateFormat("MMM d, h:mm a", Locale.US).format(Date(ms))
 }

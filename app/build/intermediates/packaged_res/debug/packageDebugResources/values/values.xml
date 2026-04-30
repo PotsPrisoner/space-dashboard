@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="amber">#ffb300</color>
+    <color name="bg">#030910</color>
+    <color name="card">#060d1c</color>
+    <color name="cyan">#00e5ff</color>
+    <color name="green">#26ff8c</color>
+    <color name="orange">#ff6200</color>
+    <color name="red">#ff1744</color>
+    <color name="violet">#d500f9</color>
+    <string name="app_name">BioSpace Monitor</string>
+    <string name="firebase_database_url" translatable="false">https://biospace-monitor-99-default-rtdb.firebaseio.com</string>
+    <string name="gcm_defaultSenderId" translatable="false">166229247086</string>
+    <string name="google_api_key" translatable="false">AIzaSyDd2nEw8qSaEslxjPd2iJVOymdzzBoT6X0</string>
+    <string name="google_app_id" translatable="false">1:166229247086:android:697ff5de56cbf85402927f</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyDd2nEw8qSaEslxjPd2iJVOymdzzBoT6X0</string>
+    <string name="google_storage_bucket" translatable="false">biospace-monitor-99.firebasestorage.app</string>
+    <string name="project_id" translatable="false">biospace-monitor-99</string>
+    <style name="Theme.BioSpaceMonitor" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="Theme.BioSpaceMonitor.SplashScreen" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.BioSpaceMonitor</item>
+    </style>
+</resources>

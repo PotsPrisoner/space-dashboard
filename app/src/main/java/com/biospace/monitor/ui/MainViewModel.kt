@@ -2,485 +2,188 @@ package com.biospace.monitor.ui
 
 import android.app.Application
 import android.content.Context
-import android.location.Location
-import android.util.Log
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.doublePreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.biospace.monitor.api.ApiClient
-import com.biospace.monitor.engine.ANSEngine
-import com.biospace.monitor.engine.SREngine
-import com.biospace.monitor.model.*
-import com.google.gson.JsonArray
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.database.*
+import com.google.firebase.ktx.Firebase
+import com.biospace.monitor.ble.WatchRepository
+import com.biospace.monitor.data.*
+import com.biospace.monitor.engine.BurdenEngine
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import java.text.SimpleDateFormat
-import java.util.*
-import kotlin.math.abs
-import com.biospace.monitor.ble.WatchRepository
+import okhttp3.*
+import com.google.gson.Gson
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "biospace_prefs")
+private val Context.store by preferencesDataStore("settings")
+private val K_LAT  = doublePreferencesKey("lat")
+private val K_LON  = doublePreferencesKey("lon")
+private val K_GPS  = booleanPreferencesKey("gps")
+private val K_NAME = stringPreferencesKey("name")
+private val K_GEM  = stringPreferencesKey("gemini")
+private val K_USER = stringPreferencesKey("user")
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+class MainViewModel(app: Application) : AndroidViewModel(app) {
+    private val repo = SpaceWeatherRepository()
+    val watchRepo = WatchRepository(app)
 
-    private val dataStore = application.dataStore
+    private val _sw      = MutableStateFlow(SpaceWeather())
+    private val _wx      = MutableStateFlow(WeatherState())
+    private val _burden  = MutableStateFlow(BurdenScore())
+    private val _loading = MutableStateFlow(false)
+    private val _error   = MutableStateFlow<String?>(null)
+    private val _symptoms   = MutableStateFlow<List<SymptomLog>>(emptyList())
+    private val _chat       = MutableStateFlow<List<ChatMessage>>(emptyList())
+    private val _geminiKey  = MutableStateFlow("")
+    private val _username   = MutableStateFlow("")
+    private val _useGps     = MutableStateFlow(true)
+    private val _lat        = MutableStateFlow(32.5093)
+    private val _lon        = MutableStateFlow(-92.1482)
+    private val _locName    = MutableStateFlow("")
+    private val _chatInput  = MutableStateFlow("")
+    private val _report     = MutableStateFlow("")
+    private val _reportLoad = MutableStateFlow(false)
 
-    private val _spaceWeather = MutableStateFlow(SpaceWeatherState())
-    val spaceWeather: StateFlow<SpaceWeatherState> = _spaceWeather.asStateFlow()
+    val sw: StateFlow<SpaceWeather>   = _sw
+    val wx: StateFlow<WeatherState>   = _wx
+    val burden: StateFlow<BurdenScore>= _burden
+    val bio: StateFlow<Biometrics>    = watchRepo.bio
+    val loading: StateFlow<Boolean>   = _loading
+    val error: StateFlow<String?>     = _error
+    val symptoms: StateFlow<List<SymptomLog>> = _symptoms
+    val chatMessages: StateFlow<List<ChatMessage>> = _chat
+    val geminiKey: StateFlow<String>  = _geminiKey
+    val username: StateFlow<String>   = _username
+    val useGps: StateFlow<Boolean>    = _useGps
+    val lat: StateFlow<Double>        = _lat
+    val lon: StateFlow<Double>        = _lon
+    val locName: StateFlow<String>    = _locName
+    val chatInput: StateFlow<String>  = _chatInput
+    val reportOutput: StateFlow<String>  = _report
+    val reportLoading: StateFlow<Boolean>= _reportLoad
 
-    private val _weather = MutableStateFlow(WeatherState())
-    val weather: StateFlow<WeatherState> = _weather.asStateFlow()
-
-    private val _srMetrics = MutableStateFlow(SRMetrics())
-    val srMetrics: StateFlow<SRMetrics> = _srMetrics.asStateFlow()
-
-    private val _ansState = MutableStateFlow(ANSState())
-    val ansState: StateFlow<ANSState> = _ansState.asStateFlow()
-
-    private val _assessment = MutableStateFlow(IntegratedAssessment())
-    val assessment: StateFlow<IntegratedAssessment> = _assessment.asStateFlow()
-
-    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
-
-    private val _chatConnected = MutableStateFlow(false)
-    val chatConnected: StateFlow<Boolean> = _chatConnected.asStateFlow()
-
-    private val db = FirebaseDatabase.getInstance()
-    private val chatRef = db.getReference("biospace_chat")
-
-    private val _location = MutableStateFlow(LocationState())
-    val location: StateFlow<LocationState> = _location.asStateFlow()
-
-    private val _isRefreshing = MutableStateFlow(false)
-    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
-
-    private var refreshJob: Job? = null
-    private var srRefreshJob: Job? = null
-
-    companion object {
-        private val PREF_LAT = doublePreferencesKey("saved_lat")
-        private val PREF_LON = doublePreferencesKey("saved_lon")
-        private val PREF_NAME = stringPreferencesKey("saved_location_name")
-        private const val TAG = "BioSpace"
-    }
+    private var userId = ""
+    private var chatRef: DatabaseReference? = null
 
     init {
-        addSystemMessage("BIOSPACE MONITOR · INITIALIZING")
-        viewModelScope.launch {
-            loadSavedLocation()
-            fetchAll()
-            startAutoRefresh()
-        }
+        viewModelScope.launch { loadSettings() }
+        viewModelScope.launch { watchRepo.bio.collect { _burden.value = BurdenEngine.update(_sw.value, _wx.value, it) } }
+        Firebase.auth.signInAnonymously().addOnSuccessListener { userId = it.user?.uid ?: UUID.randomUUID().toString() }
         startChatListener()
+        viewModelScope.launch { fetchAll() }
+        viewModelScope.launch { while(true) { delay(300_000); fetchAll() } }
     }
-
-    private suspend fun loadSavedLocation() {
-        dataStore.data.first().let { prefs ->
-            val lat = prefs[PREF_LAT] ?: 32.5093
-            val lon = prefs[PREF_LON] ?: -92.1482
-            val name = prefs[PREF_NAME] ?: "West Monroe, Louisiana"
-            _location.value = LocationState(lat, lon, name)
-            _weather.value = _weather.value.copy(lat = lat, lon = lon, locationName = name)
-        }
-    }
-
-    private suspend fun saveLocation(lat: Double, lon: Double, name: String) {
-        dataStore.edit { prefs ->
-            prefs[PREF_LAT] = lat
-            prefs[PREF_LON] = lon
-            prefs[PREF_NAME] = name
-        }
-    }
-
-    fun setLocation(lat: Double, lon: Double, name: String) {
-        _location.value = LocationState(lat, lon, name, false)
-        _weather.value = _weather.value.copy(lat = lat, lon = lon, locationName = name, isLoading = true)
-        viewModelScope.launch {
-            saveLocation(lat, lon, name)
-            fetchWeather()
-        }
-    }
-
-    fun setGpsLocation(location: Location) {
-        val lat = location.latitude
-        val lon = location.longitude
-        _location.value = LocationState(lat, lon, "GPS Location", true)
-        _weather.value = _weather.value.copy(lat = lat, lon = lon, locationName = "GPS Location", isLoading = true)
-        viewModelScope.launch {
-            // Reverse geocode
-            try {
-                val result = ApiClient.geocoding.searchCity("$lat,$lon")
-                val name = result.results?.firstOrNull()?.let {
-                    "${it.name}${if (it.admin1 != null) ", ${it.admin1}" else ""}"
-                } ?: "GPS Location"
-                _location.value = _location.value.copy(name = name)
-                _weather.value = _weather.value.copy(locationName = name)
-                saveLocation(lat, lon, name)
-            } catch (e: Exception) {
-                Log.w(TAG, "Reverse geocode failed", e)
-            }
-            fetchWeather()
-        }
-    }
-
-    suspend fun searchCity(query: String): List<GeoResult> {
-        return try {
-            ApiClient.geocoding.searchCity(query).results ?: emptyList()
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
-    fun refresh() {
-        viewModelScope.launch {
-            _isRefreshing.value = true
-            fetchAll()
-            _isRefreshing.value = false
-        }
-    }
-
-    private fun startAutoRefresh() {
-        refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
-            while (isActive) {
-                delay(60_000)
-                fetchAll()
-            }
-        }
-        srRefreshJob?.cancel()
-        srRefreshJob = viewModelScope.launch {
-            while (isActive) {
-                delay(4_000)
-                updateDerivedEngines()
-            }
-        }
-    }
-
-    private suspend fun fetchAll() {
-        coroutineScope {
-            launch { fetchSpaceWeather() }
-            launch { fetchHemisphericPower() }
-            launch { fetchIMF() }
-            launch { fetchCME() }
-            launch { fetchWeather() }
-        }
-        updateDerivedEngines()
-        addSystemMessage("AUTO ▸ Kp=${String.format("%.2f", _spaceWeather.value.kp)} · ${
-            SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
-        }")
-    }
-
-    private suspend fun fetchSpaceWeather() {
-        try {
-            // Kp
-            val kpData = ApiClient.noaa.getKpIndex()
-            val kpHistory = kpData.takeLast(180).mapNotNull { it.kpIndex.toDoubleOrNull() }
-            val kp = kpHistory.lastOrNull() ?: 0.0
-
-            // X-ray
-            val xray = ApiClient.noaa.getXray()
-            val lastXray = xray.lastOrNull()
-            val flux = lastXray?.flux?.toDoubleOrNull() ?: 1e-9
-            val flareClass = when {
-                flux >= 1e-4 -> "X${String.format("%.1f", flux / 1e-4)}"
-                flux >= 1e-5 -> "M${String.format("%.1f", flux / 1e-5)}"
-                flux >= 1e-6 -> "C${String.format("%.1f", flux / 1e-6)}"
-                flux >= 1e-7 -> "B${String.format("%.1f", flux / 1e-7)}"
-                else -> "A${String.format("%.1f", flux / 1e-8)}"
-            }
-
-            // Storm scales
-            val gScale = when {
-                kp >= 9.0 -> 5; kp >= 8.0 -> 4; kp >= 7.0 -> 3
-                kp >= 6.0 -> 2; kp >= 5.0 -> 1; else -> 0
-            }
-            val sScale = when {
-                flux >= 1e-4 -> 5; flux >= 1e-5 -> 4; flux >= 1e-6 -> 3
-                flux >= 1e-7 -> 2; flux >= 1e-8 -> 1; else -> 0
-            }
-            val rScale = sScale
-
-            // Alerts
-            val alerts = try { ApiClient.noaa.getAlerts() } catch (e: Exception) { emptyList() }
-
-            // Plasma
-            val plasma = try { ApiClient.noaa.getPlasma() } catch (e: Exception) { JsonArray() }
-            var speed = 400.0; var density = 5.0; var temperature = 100000.0
-            val speeds = mutableListOf<Double>()
-            val densities = mutableListOf<Double>()
-            if (plasma.size() > 0) {
-                val slice = plasma.asList().takeLast(180)
-                for (entry in slice) {
-                    val arr = entry.asJsonArray
-                    arr.getOrNull(2)?.asString?.toDoubleOrNull()?.let { speeds.add(it) }
-                    arr.getOrNull(1)?.asString?.toDoubleOrNull()?.let { densities.add(it) }
-                }
-                speed = speeds.lastOrNull() ?: 400.0
-                density = densities.lastOrNull() ?: 5.0
-                val last = plasma.asList().lastOrNull()?.asJsonArray
-                temperature = last?.getOrNull(3)?.asString?.toDoubleOrNull() ?: 100000.0
-            }
-
-            // TEC estimate from Kp and speed
-            val tecMedian = 16.3
-            val tecLocal = tecMedian + kp * 0.3 + (speed - 400) * 0.005
-
-            _spaceWeather.value = _spaceWeather.value.copy(
-                kp = kp,
-                kpHistory = kpHistory,
-                speed = speed,
-                density = density,
-                temperature = temperature,
-                xrayFlux = flux,
-                flareClass = flareClass,
-                gScale = gScale,
-                sScale = sScale,
-                rScale = rScale,
-                alerts = alerts,
-                speedHistory = speeds,
-                densityHistory = densities,
-                tecLocal = tecLocal,
-                tecMedian = tecMedian,
-                isLoading = false,
-                lastUpdated = System.currentTimeMillis(),
-                error = null
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchSpaceWeather failed", e)
-            _spaceWeather.value = _spaceWeather.value.copy(
-                isLoading = false,
-                error = "Space weather fetch failed: ${e.message}"
-            )
-        }
-    }
-
-    private suspend fun fetchIMF() {
-        try {
-            val mag = ApiClient.noaa.getMag()
-            val slice = mag.asList().takeLast(180)
-            val bzArr = mutableListOf<Double>()
-            val btArr = mutableListOf<Double>()
-            val bxArr = mutableListOf<Double>()
-            val byArr = mutableListOf<Double>()
-            for (entry in slice) {
-                val arr = entry.asJsonArray
-                arr.getOrNull(1)?.asString?.toDoubleOrNull()?.let { bxArr.add(it) }
-                arr.getOrNull(2)?.asString?.toDoubleOrNull()?.let { byArr.add(it) }
-                arr.getOrNull(3)?.asString?.toDoubleOrNull()?.let { bzArr.add(it) }
-                arr.getOrNull(6)?.asString?.toDoubleOrNull()?.let { btArr.add(it) }
-            }
-            val last = mag.asList().lastOrNull()?.asJsonArray
-            val bz = last?.getOrNull(3)?.asString?.toDoubleOrNull() ?: _spaceWeather.value.bz
-            val bt = last?.getOrNull(6)?.asString?.toDoubleOrNull() ?: _spaceWeather.value.bt
-            val bx = last?.getOrNull(1)?.asString?.toDoubleOrNull() ?: _spaceWeather.value.bx
-            val by = last?.getOrNull(2)?.asString?.toDoubleOrNull() ?: _spaceWeather.value.by
-            val phi = last?.getOrNull(4)?.asString?.toDoubleOrNull() ?: _spaceWeather.value.phi
-            val theta = last?.getOrNull(5)?.asString?.toDoubleOrNull() ?: _spaceWeather.value.theta
-
-            _spaceWeather.value = _spaceWeather.value.copy(
-                bz = bz, bt = bt, bx = bx, by = by, phi = phi, theta = theta,
-                bzHistory = bzArr, btHistory = btArr, bxHistory = bxArr, byHistory = byArr
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "fetchIMF failed", e)
-        }
-    }
-
-    private suspend fun fetchHemisphericPower() {
-        try {
-            val body = ApiClient.noaa.getHemisphericPower().string()
-            var north = Double.NaN; var south = Double.NaN
-            // Parse last non-comment data line
-            val lastLine = body.lines()
-                .filter { !it.startsWith("#") && it.isNotBlank() }
-                .lastOrNull()
-            if (lastLine != null) {
-                val parts = lastLine.trim().split(Regex("\\s+"))
-                if (parts.size >= 4) {
-                    north = parts[2].toDoubleOrNull() ?: Double.NaN
-                    south = parts[3].toDoubleOrNull() ?: Double.NaN
-                }
-            }
-            if (north.isNaN() || south.isNaN()) {
-                val kp = _spaceWeather.value.kp
-                north = kp * kp * 4.2 + 2
-                south = kp * kp * 0.9 * 4.2 + 2
-            }
-            val kpHistory = _spaceWeather.value.kpHistory
-            val northHistory = kpHistory.map { k -> k * k * 4.2 + 2 }
-            val southHistory = kpHistory.map { k -> k * k * 0.9 * 4.2 + 2 }
-            _spaceWeather.value = _spaceWeather.value.copy(
-                hpNorth = north, hpSouth = south,
-                hpNorthHistory = northHistory, hpSouthHistory = southHistory
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "fetchHP failed", e)
-        }
-    }
-
-    private suspend fun fetchCME() {
-        try {
-            val cal = Calendar.getInstance()
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            val endDate = sdf.format(cal.time)
-            cal.add(Calendar.DAY_OF_YEAR, -7)
-            val startDate = sdf.format(cal.time)
-            val cmes = ApiClient.nasa.getCme(startDate, endDate)
-            _spaceWeather.value = _spaceWeather.value.copy(cmeEvents = cmes.takeLast(6))
-        } catch (e: Exception) {
-            Log.w(TAG, "fetchCME failed: ${e.message}")
-        }
-    }
-
-    private suspend fun fetchWeather() {
-        val loc = _location.value
-        try {
-            val response = ApiClient.weather.getWeather(loc.lat, loc.lon)
-            val current = response.current ?: return
-            val hourly = response.hourly
-
-            val pressureHistory = hourly?.surface_pressure?.takeLast(24) ?: emptyList()
-
-            _weather.value = WeatherState(
-                tempF = current.temperature_2m,
-                humidity = current.relative_humidity_2m,
-                pressureHpa = current.surface_pressure,
-                pressureHistory = pressureHistory,
-                windMph = current.wind_speed_10m,
-                apparentTempF = current.apparent_temperature,
-                locationName = loc.name,
-                lat = loc.lat,
-                lon = loc.lon,
-                isLoading = false,
-                error = null
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchWeather failed", e)
-            _weather.value = _weather.value.copy(
-                isLoading = false,
-                error = "Weather fetch failed"
-            )
-        }
-    }
-
-    private fun updateDerivedEngines() {
-        val sw = _spaceWeather.value
-        val sr = SREngine.computeSRMetrics(sw)
-        val ans = ANSEngine.computeANSLoad(sw, sr)
-        val assessment = ANSEngine.computeIntegratedAssessment(sw, sr, _weather.value)
-        _srMetrics.value = sr
-        _ansState.value = ans
-        _assessment.value = assessment
-    }
-
-    // ── Firebase Chat ──────────────────────────────────────────────────────────
 
     private fun startChatListener() {
-        // Keep only last 200 messages in the query to avoid unlimited growth
-        val query = chatRef.orderByChild("timestamp").limitToLast(200)
-        query.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val msgs = snapshot.children.mapNotNull { child ->
-                    try {
-                        ChatMessage(
-                            id        = child.key ?: "",
-                            text      = child.child("text").getValue(String::class.java) ?: "",
-                            nick      = child.child("nick").getValue(String::class.java) ?: "ANON",
-                            mine      = false,   // remote; local is set at send time
-                            isSystem  = child.child("isSystem").getValue(Boolean::class.java) ?: false,
-                            timestamp = child.child("timestamp").getValue(Long::class.java) ?: 0L
-                        )
-                    } catch (e: Exception) { null }
-                }
-                _chatMessages.value = msgs
-                _chatConnected.value = true
+        chatRef = FirebaseDatabase.getInstance().getReference("biospace_chat")
+        chatRef?.limitToLast(50)?.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snap: DataSnapshot) {
+                _chat.value = snap.children.mapNotNull { it.getValue(ChatMessage::class.java) }
             }
-            override fun onCancelled(error: DatabaseError) {
-                Log.w(TAG, "Chat listener cancelled: ${error.message}")
-                _chatConnected.value = false
-            }
-        })
-
-        // Connection state indicator
-        db.getReference(".info/connected").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                _chatConnected.value = snapshot.getValue(Boolean::class.java) ?: false
-            }
-            override fun onCancelled(error: DatabaseError) {}
+            override fun onCancelled(e: DatabaseError) {}
         })
     }
 
-    fun sendChatMessage(text: String, nick: String) {
-        val trimText = text.trim()
-        val trimNick = nick.trim().uppercase().take(12).ifBlank { "ANON" }
-        if (trimText.isBlank()) return
-
-        val key = chatRef.push().key ?: return
-        val payload = mapOf(
-            "text"      to trimText,
-            "nick"      to trimNick,
-            "isSystem"  to false,
-            "timestamp" to System.currentTimeMillis()
-        )
-        chatRef.child(key).setValue(payload)
-
-        // Prune to last 300 entries to prevent the DB growing forever
-        chatRef.orderByChild("timestamp").limitToFirst(1).addListenerForSingleValueEvent(
-            object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val count = _chatMessages.value.size
-                    if (count > 300) snapshot.children.forEach { it.ref.removeValue() }
-                }
-                override fun onCancelled(error: DatabaseError) {}
-            }
-        )
+    fun fetchAll() {
+        viewModelScope.launch {
+            _loading.value = true; _error.value = null
+            try {
+                val sw = repo.fetchAll(_lat.value, _lon.value)
+                val wx = repo.fetchWeather(_lat.value, _lon.value)
+                _sw.value = sw; _wx.value = wx
+                if (wx.locationName.isNotBlank()) _locName.value = wx.locationName
+                _burden.value = BurdenEngine.update(sw, wx, watchRepo.bio.value)
+            } catch (e: Exception) { _error.value = "Fetch error: ${e.message}" }
+            _loading.value = false
+        }
     }
 
-    private fun addSystemMessage(text: String) {
-        // System messages are local-only (init/status lines), not pushed to Firebase
-        val msg = ChatMessage(text = text, nick = "SYSTEM", mine = false, isSystem = true)
-        _chatMessages.value = (_chatMessages.value + msg).takeLast(200)
+    fun setLocation(lat: Double, lon: Double, name: String = "") {
+        _lat.value = lat; _lon.value = lon
+        if (name.isNotBlank()) _locName.value = name
+        viewModelScope.launch { saveSettings(); fetchAll() }
     }
 
-    private fun JsonArray.getOrNull(index: Int) = try { this[index] } catch (e: Exception) { null }
+    fun setUseGps(v: Boolean) { _useGps.value = v; viewModelScope.launch { saveSettings() } }
+    fun setGeminiKey(k: String) { _geminiKey.value = k; viewModelScope.launch { saveSettings() } }
+    fun setUsername(v: String) { _username.value = v; viewModelScope.launch { saveSettings() } }
+    fun setChatInput(v: String) { _chatInput.value = v }
+    fun logSymptom(s: SymptomLog) { _symptoms.value = (listOf(s) + _symptoms.value).take(100) }
 
-    // ── Watch BLE (auto-patched) ─────────────────────────────────────
-    private val watchRepo by lazy { WatchRepository.getInstance(getApplication()) }
+    fun sendChatMessage() {
+        val text = _chatInput.value.trim(); if (text.isBlank() || userId.isBlank()) return
+        val msg = ChatMessage(UUID.randomUUID().toString(), userId,
+            _username.value.ifBlank { "Anonymous" }, text,
+            System.currentTimeMillis(), _sw.value.kp, _burden.value.overall)
+        chatRef?.child(msg.id)?.setValue(msg)
+        _chatInput.value = ""
+    }
 
-    val watchConnectionState = watchRepo.connectionState
-    val watchDevice          = watchRepo.lastKnownDevice
-    val watchBattery         = watchRepo.battery
+    fun generateReport(clinical: Boolean) {
+        viewModelScope.launch {
+            val key = _geminiKey.value.trim()
+            if (key.isBlank()) { _report.value = "⚠ Enter your Gemini API key below."; return@launch }
+            _reportLoad.value = true; _report.value = ""
+            try {
+                val sw = _sw.value; val wx = _wx.value; val bio = watchRepo.bio.value; val b = _burden.value
+                val style = if (clinical) "clinical with physiological mechanisms and research citations" else "plain language, easy for anyone to understand"
+                val prompt = """You are a heliobiological ANS health analyst. Generate a $style report.
 
-    val bloodPressure = watchRepo.bloodPressure
-    val heartRate     = watchRepo.heartRate
-    val spO2          = watchRepo.spO2
-    val steps         = watchRepo.steps
-    val sleep         = watchRepo.sleep
-    val stress        = watchRepo.stress
-    val hourlyBundle  = watchRepo.hourlyBundle
-    val oneKeyBundle  = watchRepo.oneKeyBundle
+⚠ DISCLAIMER: Begin with this exact text: "⚠ DISCLAIMER: This is an AI-generated informational report. It is NOT medical advice and was NOT produced by a licensed medical professional. Always consult your physician."
 
-    val bpHistory     = watchRepo.bpHistory
-    val hrHistory     = watchRepo.hrHistory
-    val spo2History   = watchRepo.spo2History
-    val sleepHistory  = watchRepo.sleepHistory
-    val stressHistory = watchRepo.stressHistory
-    val stepsHistory  = watchRepo.stepsHistory
-    val respiration   = watchRepo.respiration
-    fun refreshWatch() = watchRepo.sendRefresh()
+CURRENT DATA (${java.util.Date()}):
+ANS Burden: ${b.overall.toInt()}% | Alert: ${b.alertLevel.name} | Magnitude: ${b.magnitude.toInt()}% | Fluctuation: ${b.fluctuation.toInt()}%
+Kp: ${sw.kp} | Solar Wind: ${sw.swSpeed.toInt()} km/s | IMF Bz: ${"%.1f".format(sw.imfBz)} nT (${sw.imfTrend})
+Flares: ${sw.flares.size} | CME: ${sw.cmeSpeed.toInt()} km/s arrival ${sw.cmeArrivalHrs}hrs | GST: ${sw.gstActive}
+IPS: ${sw.ipsCount} | HSS: ${sw.hssActive} | MPC: ${sw.mpcCount} | RBE: ${sw.rbeCount} | SEP: ${sw.sepActive}
+Hemispheric Power: ${sw.hemisphericPower.toInt()} GW (${sw.fountainDumping}) | Schumann: ${sw.srFundamental} Hz
+Weather: ${wx.temp.toInt()}°F | Humidity: ${wx.humidity.toInt()}% | Pressure: ${wx.pressure.toInt()} hPa
+Heart Rate: ${if (bio.heartRate > 0) "${bio.heartRate} bpm (${bio.hrSource})" else "not recorded"}
+BP: ${if (bio.bpSys > 0) "${bio.bpSys}/${bio.bpDia} mmHg" else "not recorded"}
+SpO2: ${if (bio.spO2 > 0) "${bio.spO2}%" else "not recorded"}
+HRV RMSSD: ${if (bio.rmssd > 0f) "${bio.rmssd.toInt()} ms" else "not recorded"}
+Sleep: ${if (bio.sleepHours > 0f) "${bio.sleepHours} hrs" else "not recorded"}
+Top burden drivers: ${b.breakdown.entries.sortedByDescending { it.value.combined }.take(5).joinToString(", ") { "${it.key} (${it.value.combined.toInt()}%)" }}
 
-    fun connectWatch()              = watchRepo.connect()
-    fun disconnectWatch()           = watchRepo.disconnect()
-    fun connectWatchTo(mac: String) = watchRepo.connectTo(mac)
+Write sections: 1) Overall ANS Assessment  2) Space & Environmental Drivers  3) Biometric Findings  4) Fluctuation Analysis (critical for dysautonomia — note that oscillation is more harmful than stable highs or lows)  5) Expected Symptoms Next 12-24hrs  6) Mitigation Strategies  7) 48hr Outlook"""
 
+                _report.value = callGemini(key, prompt)
+            } catch (e: Exception) { _report.value = "⚠ Report failed: ${e.message}" }
+            _reportLoad.value = false
+        }
+    }
+
+    private suspend fun callGemini(key: String, prompt: String): String = withContext(Dispatchers.IO) {
+        val client = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build()
+        val body = RequestBody.create(MediaType.parse("application/json"),
+            Gson().toJson(mapOf("contents" to listOf(mapOf("parts" to listOf(mapOf("text" to prompt)))),
+                "generationConfig" to mapOf("temperature" to 0.3, "maxOutputTokens" to 2000))))
+        val req = Request.Builder()
+            .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$key")
+            .post(body).build()
+        val resp = client.newCall(req).execute()
+        val json = Gson().fromJson(resp.body()?.string(), Map::class.java)
+        val candidates = json["candidates"] as? List<*>
+        val content = (candidates?.firstOrNull() as? Map<*, *>)?.get("content") as? Map<*, *>
+        val parts = content?.get("parts") as? List<*>
+        (parts?.firstOrNull() as? Map<*, *>)?.get("text")?.toString() ?: "No response."
+    }
+
+    private suspend fun loadSettings() {
+        getApplication<Application>().store.data.first().let {
+            _lat.value = it[K_LAT] ?: 32.5093; _lon.value = it[K_LON] ?: -92.1482
+            _useGps.value = it[K_GPS] ?: true; _locName.value = it[K_NAME] ?: ""
+            _geminiKey.value = it[K_GEM] ?: ""; _username.value = it[K_USER] ?: ""
+        }
+    }
+    private suspend fun saveSettings() {
+        getApplication<Application>().store.edit {
+            it[K_LAT] = _lat.value; it[K_LON] = _lon.value; it[K_GPS] = _useGps.value
+            it[K_NAME] = _locName.value; it[K_GEM] = _geminiKey.value; it[K_USER] = _username.value
+        }
+    }
 }
